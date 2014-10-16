@@ -146,7 +146,9 @@ def cross_origin(*args, **kwargs):
             else:
                 resp = make_response(f(*args, **kwargs))
 
-            _set_cors_headers(resp, options)
+            _set_cors_headers(resp, options,
+                origins_fn=options.get('origins_fn', _get_cors_origin)
+            )
             setattr(resp, FLASK_CORS_EVALUATED, True)
 
             return resp
@@ -221,6 +223,7 @@ class CORS(object):
         _resources = _get_option('resources', kwargs, app, default=[r'/*'])
         _intercept_exceptions = _get_option('intercept_exceptions', kwargs, app,
                                             default=True)
+        _origins_fn = kwargs.get('origins_fn', _get_cors_origin)
 
         if isinstance(_resources, dict):  # sort the regexps by length
             # To make the API more consistent with the decorator, allow a
@@ -255,7 +258,7 @@ class CORS(object):
                     _options = options.copy()
                     _options.update(res_options)
                     _serialize_options(_options)
-                    _set_cors_headers(resp, _options)
+                    _set_cors_headers(resp, _options, origins_fn=_origins_fn)
                     break
             return resp
 
@@ -277,7 +280,7 @@ class CORS(object):
                 app.handle_user_exception)
 
 
-def _get_cors_origin(options, request_origin):
+def _get_cors_origin(request_origin, options):
     origins = options.get('origins')
     wildcard = '*' in origins
     # If the Origin header is not present terminate this set of steps.
@@ -311,9 +314,10 @@ def _get_cors_origin(options, request_origin):
         return None
 
 
-def _get_cors_headers(options, request_headers, request_method, response_headers=None):
+def _get_cors_headers(options, request_headers, request_method,
+                      response_headers=None, origins_fn=_get_cors_origin):
     headers = dict(response_headers or {}) # copy dict
-    origin_to_set = _get_cors_origin(options, request_headers.get('Origin'))
+    origin_to_set = origins_fn(request_headers.get('Origin'), options)
 
     if origin_to_set is None: # CORS is not enabled for this route!
         return headers
@@ -336,7 +340,7 @@ def _get_cors_headers(options, request_headers, request_method, response_headers
 
     return dict((k,v) for k,v in headers.items() if v is not None)
 
-def _set_cors_headers(resp, options):
+def _set_cors_headers(resp, options, origins_fn=_get_cors_origin):
     '''
         Performs the actual evaluation of Flas-CORS options and actually
         modifies the response object.
@@ -352,7 +356,8 @@ def _set_cors_headers(resp, options):
     headers_to_set = _get_cors_headers(options,
                                        request.headers,
                                        request.method,
-                                       resp.headers)
+                                       resp.headers,
+                                       origins_fn=origins_fn)
 
     for k,v in headers_to_set.items():
         resp.headers[k] = v
