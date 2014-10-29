@@ -314,10 +314,10 @@ def _get_cors_origin(request_origin, options):
         return None
 
 
-def _get_cors_headers(options, request_headers, request_method,
-                      response_headers=None, origins_fn=_get_cors_origin):
+def _get_cors_headers(options, request_headers, request_method, get_origin,
+                      response_headers=None):
     headers = dict(response_headers or {}) # copy dict
-    origin_to_set = origins_fn(request_headers.get('Origin'), options)
+    origin_to_set = get_origin(request_headers.get('Origin'), options)
 
     if origin_to_set is None: # CORS is not enabled for this route!
         return headers
@@ -357,7 +357,7 @@ def _set_cors_headers(resp, options, origins_fn=_get_cors_origin):
                                        request.headers,
                                        request.method,
                                        resp.headers,
-                                       origins_fn=origins_fn)
+                                       get_origin=origins_fn)
 
     for k,v in headers_to_set.items():
         resp.headers[k] = v
